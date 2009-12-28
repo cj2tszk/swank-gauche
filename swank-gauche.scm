@@ -579,18 +579,19 @@ gauche's own files.  Alternatively, you could add Emacs style
 
 (define *operator-args* '())
 (define (load-operator-args gauche-refe-path)
-  (set! *operator-args* 
-	(if gauche-refe-path
-	    (grep "^@defun|^@defmac|^@defspec|^@deffn"
-		  gauche-refe-path
-		  (lambda (line)
-		    (read-from-string
-		     (regexp-replace-all* #`"(,line)"
-					  #/@dots{}/ "..."
-					  #/@code{(\S*)}/ "\\1"
-					  #/@def\w+ / ""
-					  #/\[(.*)\]/ "&optional \\1"))))
-	    '())))
+  (set! *operator-args*
+	(append (if gauche-refe-path
+		    (grep "^@defun|^@defmac|^@defspec|^@deffn"
+			  gauche-refe-path
+			  (lambda (line)
+			    (read-from-string
+			     (regexp-replace-all* #`"(,line)"
+						  #/@dots{}/ "..."
+						  #/@code{(\S*)}/ "\\1"
+						  #/@def\w+ / ""
+						  #/\[(.*)\]/ "&optional \\1"))))
+		    '())
+		*operator-args*)))
 
 (define (get-func-args op-sym a)
   (cond

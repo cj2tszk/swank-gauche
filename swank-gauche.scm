@@ -311,7 +311,8 @@ gauche's own files.  Alternatively, you could add Emacs style
           (string->symbol package))))
 
 (define (user-env name)
-  (find-module (module-symbol name)))
+  (or (find-module (module-symbol name))
+      (error "Could not find user environment." name)))
 
 (define (all-modules->string-list)
   (map (lambda (m) (symbol->string (module-name m))) (all-modules)))
@@ -404,7 +405,8 @@ gauche's own files.  Alternatively, you could add Emacs style
   (parameterize
       ((*emacs-packet-id* id)
        (*buffer-package* (module-symbol package)))
-    (if (not (swank-gauche:bound? (car sexp)))
+    (if (and (list? sexp)
+	     (not (swank-gauche:bound? (car sexp))))
         (begin
 	  (log-event "Not Impremented: ~s~%" (car sexp))
 	  (write-abort))
@@ -455,29 +457,26 @@ gauche's own files.  Alternatively, you could add Emacs style
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Swank functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-macro (defslimefun name params . bodys)
+(define-macro (defslimefun name params :rest bodys)
   `(with-module swank-gauche
      (define (,name ,@params) ,@bodys)))
 
 (defslimefun connection-info ()
-  (let ((p (user-env #f)))
-    `(:pid ,(sys-getpid)
-	   :package (:name ,(x->string (module-name p)) :prompt ,(x->string (module-name p)))
-           :features '()
-           :modules ,(all-modules->string-list)
-	   :lisp-implementation (:type "Gauche" :version ,(gauche-version))
-           :version "2009-08-02-gauche")
-    ))
+  `(:pid ,(sys-getpid)
+	 :package (:name "user" :prompt "user")
+	 :features '()
+	 :modules ,(all-modules->string-list)
+	 :lisp-implementation (:type "Gauche" :version ,(gauche-version))
+	 :version "2009-12-02-gauche"))
 
 (defslimefun quit-lisp ()
   (exit))
 
-(defslimefun swank-require (modules . filename)
+(defslimefun swank-require (modules :optional filename)
   (all-modules->string-list))
 
 (defslimefun create-repl (target)
-  (list (x->string (module-name (user-env (*buffer-package*))))
-        (x->string (module-name (user-env (*buffer-package*))))))
+  (list "user" "user"))
 
 ;;;; Evaluation
 (defslimefun listener-eval (string)
@@ -622,7 +621,21 @@ gauche's own files.  Alternatively, you could add Emacs style
 	(format #f "~a" (car forms)))
       (format #f "(~a ...)" op-name)))
 
-(defslimefun arglist-for-echo-area (raw-specs . rest)
+(define +cursor-marker+ 'swank:%cursor-marker%)
+(define (parse-raw-form raw-form)
+  (map (lambda (element)
+	 (cond ((string? element) (read-conversatively element))
+	       ((list? element)  (parse-raw-form element))
+	       ((symbol? element) (if (eq? element +cursor-marker+)
+				      element
+				      (error "unknown symbol" element)))
+	       (else
+		(error "unknown type" element))))
+       raw-form))
+
+(defslimefun arglist-for-echo-area (raw-form :key 
+					     (print-right-margin #f)
+					     (print-lines #f))
   (define (emphasis lis num)
     (cond ((null? lis) '())
 	  ((eq? (car lis) '&rest) '(&rest ===> rest <===))
@@ -630,20 +643,18 @@ gauche's own files.  Alternatively, you could add Emacs style
 	  ((<= num 0) `(===> ,(car lis) <=== ,@(cdr lis)))
 	  (else
 	   (cons (car lis) (emphasis (cdr lis) (- num 1))))))
-  (let-keywords rest ((arg-indices #f)
-		      (print-right-margin #f)
-		      (print-lines #f))
-    (cond ((elisp-false? (cadr raw-specs)) nil)
-	  ((any (lambda (raw-spec arg-indice)
-		  (cond ((elisp-false? raw-spec) #f)
-			((keyword? (car raw-spec)) #f)
-			(else
-			 (and-let* ((forms (lookup-operator-args (string->symbol (car raw-spec))
-								 (*buffer-package*))))
-			   (format #f "~a" (emphasis (car forms) arg-indice))))))
-		(cadr raw-specs)
-		(cadr arg-indices)) => identity)
-	  (else nil))))
+
+  (cond ((elisp-false? (cadr raw-specs)) nil)
+	((any (lambda (raw-spec arg-indice)
+		(cond ((elisp-false? raw-spec) #f)
+		      ((keyword? (car raw-spec)) #f)
+		      (else
+		       (and-let* ((forms (lookup-operator-args (string->symbol (car raw-spec))
+							       (*buffer-package*))))
+			 (format #f "~a" (emphasis (car forms) arg-indice))))))
+	      (cadr raw-specs)
+	      (cadr arg-indices)) => identity)
+	(else nil)))
 
 (defslimefun list-all-package-names (flag)
   (all-modules->string-list))
@@ -678,7 +689,7 @@ gauche's own files.  Alternatively, you could add Emacs style
 (defslimefun load-file (filename)
   (compile-file-if-needed filename #t))
 
-(defslimefun compile-file-for-emacs (filename load-p . options)
+(defslimefun compile-file-for-emacs (filename load-p :rest options)
   (let ((ret #f)
         (timer (make <real-time-counter>)))
     (with-time-counter timer
@@ -693,11 +704,9 @@ gauche's own files.  Alternatively, you could add Emacs style
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; inspector
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (label-value-line label value . rest)
-  (let-keywords rest ((newline #t)
-		      (string  #f))
-    (list* (x->string label) ": " `(:value ,value ,string)
-	   (if newline '((:newline)) '()))))
+(define (label-value-line label value :key (newline #t) (string #f))
+  (list* (x->string label) ": " `(:value ,value ,string)
+	 (if newline '((:newline)) '())))
 
 (define-macro (label-value-line* . label-values)
   `(append ,@(map (match-lambda 
@@ -1049,7 +1058,7 @@ gauche's own files.  Alternatively, you could add Emacs style
 	(not (istate.verbose (*istate*))))
   (istate>elisp (*istate*)))
 
-(defslimefun inspector-call-nth-action (index . args)
+(defslimefun inspector-call-nth-action (index :rest args)
   (match (queue-nth (istate.actions (*istate*)) index)
     ((fun refreshp)
      (apply fun args)

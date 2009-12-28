@@ -13,6 +13,7 @@
 2. The Emacs side needs some fiddling.  I have the following in
 my .emacs:
 
+(setq slime-complete-symbol-function 'slime-complete-symbol*)
 (push "<path-to-slime-dir>/slime/contrib" load-path)
 (require 'slime-scheme)
 (setq slime-lisp-implementations

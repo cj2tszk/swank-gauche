@@ -1,60 +1,33 @@
-;;; swank-gauche.scm --- SLIME server for Gauche
-;;
-;; Copyright (C) 2009  Takayuki Suzuki
-;;
-;; This file is licensed under the terms of the GNU General Public
-;; License as distributed with Emacs (press C-h C-c for details).
-
-;;;; Installation:
-#|
-
-1. You need Gauche (version 0.9 seem to work).
-
-2. The Emacs side needs some fiddling.  I have the following in
-my .emacs:
-
-(setq slime-complete-symbol-function 'slime-complete-symbol*)
-(push "<path-to-slime-dir>/slime/contrib" load-path)
-(require 'slime-scheme)
-(setq slime-lisp-implementations
-      '((gauche ("gosh") :init gauche-init)))
-
-(defun gauche-init (file encoding)
-  (format "%S\n\n"
-          `(begin
-             (add-load-path "<path-to-slime-dir>/slime/contrib") ;; add load path to swank-gauche.scm
-             (require "swank-gauche")
-             (import swank-gauche)
-	     (with-module swank-gauche
-	       (load-operator-args "<path-to-gauche-source-dir>/doc/gauche-refe.texi"))
-             (start-swank ,file))))
-
-(defun gauche ()
-  (interactive)
-  (slime 'gauche))
-
-(defun find-gauche-package ()
-  (interactive)
-  (let ((case-fold-search t)
-        (regexp (concat "^(select-module\\>[ \t']*"
-                        "\\([^)]+\\)[ \t]*)")))
-    (save-excursion
-     (when (or (re-search-backward regexp nil t)
-               (re-search-forward regexp nil t))
-       (match-string-no-properties 1)))))
-
-(setq slime-find-buffer-package-function 'find-gauche-package)
-
-`find-gauche-package' tries to figure out which package the
-buffer belongs to, assuming that "(select-module foo)" appears
-somewhere in the file.  Luckily, this assumption is true for many of
-gauche's own files.  Alternatively, you could add Emacs style
--*- slime-buffer-package: "FOO" -*- file variables.
-
-3. Start everything with `M-x gauche'.
-
-|#
-
+;;;; swank-gauche.scm --- SLIME server for Gauche
+;;;
+;;; Copyright (C) 2009,2010  Takayuki Suzuki
+;;;
+;;;   Redistribution and use in source and binary forms, with or without
+;;;   modification, are permitted provided that the following conditions
+;;;   are met:
+;;;   
+;;;   1. Redistributions of source code must retain the above copyright
+;;;      notice, this list of conditions and the following disclaimer.
+;;;  
+;;;   2. Redistributions in binary form must reproduce the above copyright
+;;;      notice, this list of conditions and the following disclaimer in the
+;;;      documentation and/or other materials provided with the distribution.
+;;;  
+;;;   3. Neither the name of the authors nor the names of its contributors
+;;;      may be used to endorse or promote products derived from this
+;;;      software without specific prior written permission.
+;;;  
+;;;   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+;;;   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+;;;   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+;;;   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+;;;   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+;;;   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+;;;   TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+;;;   PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+;;;   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+;;;   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+;;;   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (define-module swank-gauche
   (export 
    ;; entry point
@@ -111,7 +84,7 @@ gauche's own files.  Alternatively, you could add Emacs style
 (define (1- n) (- n 1))
 
 (define (write-to-string/ss s) (write-to-string s write/ss))
-(define (describe-to-strirg s)  (with-output-to-string (lambda () (describe s))))
+(define (describe-to-string s)  (with-output-to-string (lambda () (describe s))))
 (define pretty-printer write-to-string/ss)
 
 (define (group2 rest)
@@ -467,7 +440,7 @@ gauche's own files.  Alternatively, you could add Emacs style
 	 :features '()
 	 :modules ,(all-modules->string-list)
 	 :lisp-implementation (:type "Gauche" :version ,(gauche-version))
-	 :version "2009-12-02-gauche"))
+	 :version "2010-01-03"))
 
 (defslimefun quit-lisp ()
   (exit))
@@ -594,6 +567,10 @@ gauche's own files.  Alternatively, you could add Emacs style
 		    '())
 		*operator-args*)))
 
+(define (load-gauche-operator-args gauche-source-path)
+  (when (not (elisp-false? gauche-source-path))
+    (load-operator-args #`",|gauche-source-path|/doc/gauche-refe.texi")))
+
 (define (get-func-args op-sym a)
   (cond
    ((number? a) 
@@ -682,9 +659,9 @@ gauche's own files.  Alternatively, you could add Emacs style
 		       (reverse (arglist-candidates form)))
 	     #f)))
 
-(defslimefun arglist-for-echo-area (raw-form :key 
-					     (print-right-margin #f)
-					     (print-lines #f))
+(defslimefun autodoc (raw-form :key 
+			       (print-right-margin #f)
+			       (print-lines #f))
   ;; create arglist
   (cond ((elisp-false? (cadr raw-form)) "")
 	((find-arglist (parse-raw-form (cdr raw-form))) 
@@ -692,6 +669,9 @@ gauche's own files.  Alternatively, you could add Emacs style
 	      (format #f "~a" (emphasis (car arglist)
 					(cadr arglist)))))
 	(else "")))
+
+;; for backword compatibility
+(define arglist-for-echo-area autodoc)
 
 (defslimefun list-all-package-names (flag)
   (all-modules->string-list))
@@ -1135,4 +1115,3 @@ Return nil if there's no previous object."
 (defslimefun describe-function (name)
   ;; in scheme, function and variable in same namespace.
   (describe-symbol name))
-

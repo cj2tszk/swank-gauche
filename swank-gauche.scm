@@ -8,7 +8,7 @@
 ;;;; Installation:
 #|
 
-1. You need Gauche (version 0.8.14 seem to work).
+1. You need Gauche (version 0.9 seem to work).
 
 2. The Emacs side needs some fiddling.  I have the following in
 my .emacs:
@@ -564,7 +564,9 @@ gauche's own files.  Alternatively, you could add Emacs style
   (*buffer-package* (module-symbol module))
   (list (x->string module) (x->string module)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; operator arg list
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (grep regex-str file proc)
   (let ((regex (string->regexp regex-str)))
     (with-input-from-file file
@@ -617,44 +619,79 @@ gauche's own files.  Alternatively, you could add Emacs style
 
 (defslimefun operator-arglist (op-name module)
   (or (and-let* ((forms (lookup-operator-args (string->symbol op-name)
-					   (user-env module))))
+					      (user-env module))))
 	(format #f "~a" (car forms)))
       (format #f "(~a ...)" op-name)))
 
-(define +cursor-marker+ 'swank:%cursor-marker%)
+(define +cursor-marker+ 'swank::%cursor-marker%)
+(define-constant +special-symbols+ (list +cursor-marker+ 'nil 'quasiquote 'quote))
 (define (parse-raw-form raw-form)
+  (define  (read-conversatively element)
+    (let ((sym (string->symbol element)))
+      (if (symbol-bound? sym)
+	  sym
+	  element)))
+
   (map (lambda (element)
 	 (cond ((string? element) (read-conversatively element))
 	       ((list? element)  (parse-raw-form element))
-	       ((symbol? element) (if (eq? element +cursor-marker+)
+	       ((symbol? element) (if (memq element +special-symbols+)
 				      element
 				      (error "unknown symbol" element)))
 	       (else
 		(error "unknown type" element))))
        raw-form))
 
+(define (emphasis lis num)
+  (cond ((null? lis) '())
+	((eq? (car lis) '&rest) '(&rest ===> rest <===))
+	((eq? (car lis) '...)   '(===> ... <===))
+	((<= num 0) `(===> ,(car lis) <=== ,@(cdr lis)))
+	(else
+	 (cons (car lis) (emphasis (cdr lis) (- num 1))))))
+
+(define (contain-marker? sexp)
+  (find-with-index (lambda (elem)
+		     (if (list? elem)
+			 (contain-marker? elem)
+			 (or (equal? "" elem)
+			     (eq? +cursor-marker+ elem)))) sexp))
+
+(define (operator-and-makerindex sexp)
+  (receive (index elem) (contain-marker? sexp)
+	   (if index
+	       (list (car sexp) index)
+	       #f)))
+
+(define (arglist-candidates form)
+  (cond ((list? form)
+	 (if-let1 candidate (operator-and-makerindex form)
+		  (cons candidate
+			(arglist-candidates
+			 (ref form (cadr candidate))))
+		  '()))
+	(else '())))
+
+(define (find-arglist form)
+  (call/cc (lambda (return)
+	     (for-each (lambda (candidate)
+			 (cond ((symbol? (car candidate))
+				(if-let1 found-args (lookup-operator-args (car candidate) (user-env #f))
+					 (return (list (car found-args) (cadr candidate)))))
+			       (else #f)))
+		       (reverse (arglist-candidates form)))
+	     #f)))
+
 (defslimefun arglist-for-echo-area (raw-form :key 
 					     (print-right-margin #f)
 					     (print-lines #f))
-  (define (emphasis lis num)
-    (cond ((null? lis) '())
-	  ((eq? (car lis) '&rest) '(&rest ===> rest <===))
-	  ((eq? (car lis) '...)   '(===> ... <===))
-	  ((<= num 0) `(===> ,(car lis) <=== ,@(cdr lis)))
-	  (else
-	   (cons (car lis) (emphasis (cdr lis) (- num 1))))))
-
-  (cond ((elisp-false? (cadr raw-specs)) nil)
-	((any (lambda (raw-spec arg-indice)
-		(cond ((elisp-false? raw-spec) #f)
-		      ((keyword? (car raw-spec)) #f)
-		      (else
-		       (and-let* ((forms (lookup-operator-args (string->symbol (car raw-spec))
-							       (*buffer-package*))))
-			 (format #f "~a" (emphasis (car forms) arg-indice))))))
-	      (cadr raw-specs)
-	      (cadr arg-indices)) => identity)
-	(else nil)))
+  ;; create arglist
+  (cond ((elisp-false? (cadr raw-form)) "")
+	((find-arglist (parse-raw-form (cdr raw-form))) 
+	 => (lambda (arglist)
+	      (format #f "~a" (emphasis (car arglist)
+					(cadr arglist)))))
+	(else "")))
 
 (defslimefun list-all-package-names (flag)
   (all-modules->string-list))

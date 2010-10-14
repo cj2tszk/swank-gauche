@@ -1,0 +1,44 @@
+これは、Gachue用のSwankサーバです。
+SwankサーバはCommon lisp用の開発環境であるSLIMEのbackendで、
+emacs側のfrontendと協調して動作します。
+
+swank-gaucheでは、Swankサーバの一部の機能のみ実装しています。
+
+* 機能
+
+- シンボルの補完 (c-p-c形式も可能)
+- replでの評価 (標準入力からのread, 標準出力へのwriteも可)
+- 編集バッファでの評価(C-x C-e, C-c C-c)
+- 編集バッファに対応するファイルのロード(C-c C-l, C-c C-k)
+- インスペクタ(C-c I)の一部
+- マクロ展開(C-c C-m, C-c M-m)。但し、pretty-printなし…
+- 逆アセンブル(C-c M-d)
+- CommonLispっぽいrepl変数
+-- *1 *2 *3 直近の評価結果
+-- /1 /2 /3 直近の評価結果(多値)をリストにしたもの
+-- %1 %2 %3 直近に評価した式
+- replでのモジュール変更(,change-package)
+- replでのディレクトリ変更
+
+* 動作確認環境
+
+- Gauche 0.9
+- SLIME "2010-01-03"
+
+* 設定方法
+
+`dot.emacs'の内容を.emacsにコピーしてswank-gaucheへのパスの情報を設定します。
+以下の二つの変数を設定してください。
+
+ swank-gauche-path:
+  swank-gauche.scmが格納されているディレクトリへのパス
+
+ swank-gauche-gauche-source-path:
+  Gaucheのソースを持っていて、かつ、コンパイル済の場合、ソースのトップディレク
+  トリへのパスを設定して下さい。マニュアルに定義されているオペレータの
+  引数の名前がルックアップ出来るようになります。
+
+* 起動方法
+
+`M-x gauche'で起動します。
+

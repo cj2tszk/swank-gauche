@@ -6,7 +6,7 @@
   (format "%S\n\n"
           `(begin
 	    (add-load-path ,swank-gauche-path)
-	    (load "swank-gauche")
+	    (require "swank-gauche")
 	    (with-module swank-gauche
 	       (load-gauche-operator-args ,swank-gauche-gauche-source-path)
 	       (start-swank ,file)))))

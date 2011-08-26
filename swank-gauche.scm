@@ -1,6 +1,6 @@
 ;;;; swank-gauche.scm --- SLIME server for Gauche
 ;;;
-;;; Copyright (C) 2009,2010  Takayuki Suzuki
+;;; Copyright (C) 2009-2011  Takayuki Suzuki
 ;;;
 ;;;   Redistribution and use in source and binary forms, with or without
 ;;;   modification, are permitted provided that the following conditions
@@ -253,9 +253,8 @@
 (define (write-string message)
   (send-to-emacs `(:write-string ,message)))
 
-(define (write-abort)
-  (write-return '(:abort)))
-
+(define (write-abort message . rest)
+  (write-return (list :abort (apply format #f  message rest))))
 (define (new-package module)
   (when (not (equal? (*buffer-package*) module))
     (*buffer-package* module)
@@ -382,7 +381,7 @@
 	     (not (swank-gauche:bound? (car sexp))))
         (begin
 	  (log-event "Not Impremented: ~s~%" (car sexp))
-	  (write-abort))
+	  (write-abort "Not Impremented: ~s" (car sexp)))
         (with-error-handler
           (lambda (e)
             (with-io-repl (lambda () (report-error e))))
@@ -396,7 +395,7 @@
 		    (set! ok #t))
 		  (lambda ()
 		    (unless ok
-		      (write-abort))))))))))
+		      (write-abort "eval ~a" sexp))))))))))
 
 (define (eval-region string)
   (let ((sexp (read-from-string string)))
@@ -713,11 +712,12 @@
       (set! ret (compile-file-if-needed filename #f)))
     `(:compilation-result nil ret ,(time-counter-value timer))))
 
-(defslimefun disassemble-symbol (symbol)
-  (with-output-to-string
+(defslimefun disassemble-form (quoted-form)
+  (let ((form (string-copy quoted-form 1)))
+    (with-output-to-string
       (lambda ()
-	(disasm (global-variable-ref (user-env #f)
-				     (string->symbol symbol) #f)))))
+	(disasm (eval (read-from-string form) (user-env #f)))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; inspector
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

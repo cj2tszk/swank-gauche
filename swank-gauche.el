@@ -32,8 +32,8 @@
 	(slime-search-buffer-package)))))
 
 (defun gauche-ref-lookup ()
-    (interactive)
-    (browse-url
-     (format "http://practical-scheme.net/gauche/man/?l=jp&p=%s" (thing-at-point 'symbol))))
+  (interactive)
+  (browse-url
+   (format "http://practical-scheme.net/gauche/man/?l=jp&p=%s" (thing-at-point 'symbol))))
 
 (provide 'swank-gauche)

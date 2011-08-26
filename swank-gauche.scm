@@ -562,6 +562,7 @@
 						  #/@dots{}/ "..."
 						  #/@code{(\S*)}/ "\\1"
 						  #/@def\w+ / ""
+						  #/:optional/ "&optional"
 						  #/\[(.*)\]/ "&optional \\1"))))
 		    '())
 		*operator-args*)))
@@ -622,6 +623,9 @@
   (cond ((null? lis) '())
 	((eq? (car lis) '&rest) '(&rest ===> rest <===))
 	((eq? (car lis) '...)   '(===> ... <===))
+	((eq? (car lis) '&optional)
+	 ;; skip optional-parameter indicator 
+	 (cons '&optional (emphasis (cdr lis) num)))
 	((<= num 0) `(===> ,(car lis) <=== ,@(cdr lis)))
 	(else
 	 (cons (car lis) (emphasis (cdr lis) (- num 1))))))

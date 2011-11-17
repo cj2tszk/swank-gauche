@@ -666,12 +666,14 @@
 			       (print-right-margin #f)
 			       (print-lines #f))
   ;; create arglist
-  (cond ((elisp-false? (cadr raw-form)) "")
-	((find-arglist (parse-raw-form (cdr raw-form))) 
-	 => (lambda (arglist)
-	      (format #f "~a" (emphasis (car arglist)
-					(cadr arglist)))))
-	(else "")))
+  (list
+   (cond ((elisp-false? (cadr raw-form)) "")
+	 ((find-arglist (parse-raw-form (cdr raw-form))) 
+	  => (lambda (arglist)
+	       (format #f "~a" (emphasis (car arglist)
+					 (cadr arglist)))))
+	 (else ""))
+   t))
 
 ;; for backword compatibility
 (define arglist-for-echo-area autodoc)

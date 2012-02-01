@@ -436,10 +436,11 @@
 (defslimefun connection-info ()
   `(:pid ,(sys-getpid)
 	 :package (:name "user" :prompt "user")
+	 :encoding (:coding-systems ("utf-8-unix"))
 	 :features '()
 	 :modules ,(all-modules->string-list)
 	 :lisp-implementation (:type "Gauche" :version ,(gauche-version))
-	 :version "2010-01-03"))
+	 :version "2012-01-06"))
 
 (defslimefun quit-lisp ()
   (exit))
@@ -447,7 +448,7 @@
 (defslimefun swank-require (modules :optional filename)
   (all-modules->string-list))
 
-(defslimefun create-repl (target)
+(defslimefun create-repl (target . opts)
   (list "user" "user"))
 
 ;;;; Evaluation
